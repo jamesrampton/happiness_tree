@@ -1,33 +1,33 @@
+extern crate csv;
 use linfa::{traits::Fit, Dataset};
 use linfa_trees::{DecisionTree, SplitQuality};
-use ndarray::{array, s, Array2, Axis};
+use ndarray::{s, Array2, Axis};
+use ndarray_csv::Array2Reader;
 use std::fs::File;
 use std::io::Write;
 
 fn main() {
-    let original_data: Array2<f32> = array!(
-        [1., 1., 1000., 1., 10.],
-        [1., 0., 0., 1., 6.],
-        [1., 0., 0., 1., 6.],
-        [1., 0., 0., 1., 6.],
-        [1., 0., 0., 1., 6.],
-        [1., 0., 800., 1., 8.],
-        [1., 0., 0., 0., 0.],
-        [1., 1., 0., 1., 9.],
-        [1., 1., 0., 1., 8.],
-        [1., 0., 800., 1., 8.],
-        [1., 1., 0., 1., 8.],
-        [1., 1., 500., 0., 8.],
-        [1., 0., 50., 0., 3.],
-        [1., 1., 50., 0., 4.],
-        [1., 0., 50., 0., 3.],
-    );
+    let mut reader = csv::Reader::from_path("happiness_tree.csv").unwrap();
+    let csv_data: Array2<String> = reader.deserialize_array2_dynamic().unwrap();
+    // Turn the strings from the csv data into f32 values
+    let data = csv_data.mapv(|elem| elem.parse::<f32>().unwrap());
 
-    let feature_names = vec!["Watched TV", "Pet the cat", "Rust LOC Written", "Ate pizza"];
+    let num_features = data.len_of(Axis(1)) - 1;
 
-    let num_features = original_data.len_of(Axis(1)) - 1;
-    let features = original_data.slice(s![.., 0..num_features]).to_owned();
-    let labels = original_data.column(num_features).to_owned();
+    // Get the headers into a vec
+    let mut feature_headers: Vec<String> = Vec::new();
+    for element in reader.headers().unwrap().into_iter() {
+        feature_headers.push(String::from(element))
+    }
+    // We don't want to use the last header column; that's going to be turned
+    // into a label later
+    let feature_names = feature_headers[0..num_features].to_vec();
+
+    // We don't want to include the last data column in our features; that's
+    // going to be used as our label data
+    let features = data.slice(s![.., 0..num_features]).to_owned();
+
+    let labels = data.column(num_features).to_owned();
 
     let linfa_dataset = Dataset::new(features, labels)
         .map_targets(|x| match x.to_owned() as i32 {
